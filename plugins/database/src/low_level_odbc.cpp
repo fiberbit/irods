@@ -581,11 +581,19 @@ cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
     *stmtNum = UNINITIALIZED_STATEMENT_NUMBER;
 
     int statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
+    int statementsInUse = 0;
+    for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS; i++ ) {
+        if ( icss->stmtPtr[i] ) {
+            statementsInUse++;
+        }
+    }
     for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS && statementNumber < 0; i++ ) {
         if ( icss->stmtPtr[i] == 0 ) {
             statementNumber = i;
         }
     }
+    rodsLog( LOG_NOTICE, "statement table, %d entries in use", statementsInUse );
+    rodsLog( LOG_NOTICE, "statementNumber[%d] = %s", statementNumber, sql );
     if ( statementNumber < 0 ) {
         rodsLog( LOG_ERROR,
                  "cllExecSqlWithResult: too many concurrent statements" );
@@ -755,11 +763,19 @@ cllExecSqlWithResultBV(
     *stmtNum = UNINITIALIZED_STATEMENT_NUMBER;
 
     int statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
+    int statementsInUse = 0;
+    for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS; i++ ) {
+        if ( icss->stmtPtr[i] ) {
+            statementsInUse++;
+        }
+    }
     for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS && statementNumber < 0; i++ ) {
         if ( icss->stmtPtr[i] == 0 ) {
             statementNumber = i;
         }
     }
+    rodsLog( LOG_NOTICE, "statement table, %d entries in use", statementsInUse );
+    rodsLog( LOG_NOTICE, "statementNumber[%d] = %s", statementNumber, sql );
     if ( statementNumber < 0 ) {
         rodsLog( LOG_ERROR,
                  "cllExecSqlWithResultBV: too many concurrent statements" );
@@ -978,6 +994,7 @@ cllFreeStatement( icatSessionStruct *icss, int& statementNumber ) {
     // Do not free when statementNumber is negative.  If this is called twice 
     // by a client, after the first call the statementNumber will be negative
     // and nothing will be done.
+    rodsLog( LOG_NOTICE, "cllFreeStatement(%p, %d)", icss, statementNumber);
     if (statementNumber < 0) {
         return 0;
     }
