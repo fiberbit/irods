@@ -552,6 +552,41 @@ _cllExecSqlNoResult(
 }
 
 /*
+   ISO8601 timestamp with milliseconds.
+*/
+void
+generateTimestampMillis( char *ts, const struct timeval &tv ) {
+    struct tm utc;
+    char timestamp[TIME_LEN];
+    if ( ts == NULL ) {
+        return;
+    }
+    gmtime_r( &tv.tv_sec, &utc );
+    strftime( timestamp, TIME_LEN, "%Y%m%dT%H%M%S", &utc );
+    snprintf( ts, strlen( timestamp) + 6, "%s.%03dZ", timestamp, ( int ) tv.tv_usec/1000 );
+}
+
+/*
+   Add trace id (per process) to be able to later match long running or
+   not freed entries in the statement table with the sql and bind values
+   that started them.
+*/
+long
+cllGetNextTraceId( void ) {
+    static long traceId = 0;
+    return ++traceId;
+}
+
+void
+logConcurrentStatements( icatStmtStrct* stmtPtr[] ) {
+    for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS; i++ ) {
+        if ( stmtPtr[i] ) {
+            rodsLog( LOG_NOTICE, "active statement with traceId: %ld in slot %d", stmtPtr[i]->traceId, i);
+        }
+    }
+}
+
+/*
    Execute a SQL command that returns a result table, and
    and bind the default row.
    This version now uses the global array of bind variables.
@@ -559,6 +594,8 @@ _cllExecSqlNoResult(
 int
 cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
 
+    long traceId = cllGetNextTraceId();
+    rodsLog( LOG_NOTICE, "traceId: %ld, starting \"%s\"", traceId, sql);
 
     /* In 2.2 and some versions before, this would call
        _cllExecSqlNoResult with "begin", similar to how cllExecSqlNoResult
@@ -581,18 +618,12 @@ cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
     *stmtNum = UNINITIALIZED_STATEMENT_NUMBER;
 
     int statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
-    int statementsInUse = 0;
-    for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS; i++ ) {
-        if ( icss->stmtPtr[i] ) {
-            statementsInUse++;
-        }
-    }
+    logConcurrentStatements( icss->stmtPtr );
     for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS && statementNumber < 0; i++ ) {
         if ( icss->stmtPtr[i] == 0 ) {
             statementNumber = i;
         }
     }
-    rodsLog( LOG_NOTICE, "statement table, %d entries in use", statementsInUse );
     rodsLog( LOG_NOTICE, "statementNumber[%d] = %s", statementNumber, sql );
     if ( statementNumber < 0 ) {
         rodsLog( LOG_ERROR,
@@ -607,6 +638,8 @@ cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
     *stmtNum = statementNumber;
 
     myStatement->stmtPtr = hstmt;
+    myStatement->traceId = traceId;
+    (void) gettimeofday(&myStatement->startTime, NULL);
 
     if ( bindTheVariables( hstmt, sql ) != 0 ) {
         return -1;
@@ -748,6 +781,8 @@ cllExecSqlWithResultBV(
     const char *sql,
     std::vector< std::string > &bindVars ) {
 
+    long traceId = cllGetNextTraceId();
+    rodsLog( LOG_NOTICE, "traceId: %ld, starting \"%s\"", traceId, sql);
     rodsLog( LOG_DEBUG10, "%s", sql );
 
     HDBC myHdbc = icss->connectPtr;
@@ -763,18 +798,12 @@ cllExecSqlWithResultBV(
     *stmtNum = UNINITIALIZED_STATEMENT_NUMBER;
 
     int statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
-    int statementsInUse = 0;
-    for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS; i++ ) {
-        if ( icss->stmtPtr[i] ) {
-            statementsInUse++;
-        }
-    }
+    logConcurrentStatements( icss->stmtPtr );
     for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS && statementNumber < 0; i++ ) {
         if ( icss->stmtPtr[i] == 0 ) {
             statementNumber = i;
         }
     }
-    rodsLog( LOG_NOTICE, "statement table, %d entries in use", statementsInUse );
     rodsLog( LOG_NOTICE, "statementNumber[%d] = %s", statementNumber, sql );
     if ( statementNumber < 0 ) {
         rodsLog( LOG_ERROR,
@@ -789,6 +818,8 @@ cllExecSqlWithResultBV(
     *stmtNum = statementNumber;
 
     myStatement->stmtPtr = hstmt;
+    myStatement->traceId = traceId;
+    (void) gettimeofday(&myStatement->startTime, NULL);
 
     for ( std::size_t i = 0; i < bindVars.size(); i++ ) {
         if ( !bindVars[i].empty() ) {
@@ -989,22 +1020,28 @@ cllCurrentValueString( const char *itemName, char *outString, int maxSize ) {
 int
 cllFreeStatement( icatSessionStruct *icss, int& statementNumber ) {
 
+    char timestamp[TIME_LEN];
+
     // Issue 3862 - Statement number is set to negative until it is 
     // created.  When the statement is freed it is again set to negative.
     // Do not free when statementNumber is negative.  If this is called twice 
     // by a client, after the first call the statementNumber will be negative
     // and nothing will be done.
-    rodsLog( LOG_NOTICE, "cllFreeStatement(%p, %d)", icss, statementNumber);
     if (statementNumber < 0) {
         return 0;
     }
 
     icatStmtStrct * myStatement = icss->stmtPtr[statementNumber];
     if ( myStatement == NULL ) { /* already freed */
+        rodsLog( LOG_NOTICE, "cllFreeStatement(%p, %d) was already freed?!?", icss, statementNumber);
         statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
         return 0;
     }
 
+    generateTimestampMillis( timestamp, myStatement->startTime );
+    rodsLog( LOG_NOTICE, "traceId: %d, cllFreeStatement(%p, %d), started %s",
+            myStatement->traceId, icss, statementNumber,
+            timestamp);
     _cllFreeStatementColumns( icss, statementNumber );
 
     SQLRETURN stat = SQLFreeHandle( SQL_HANDLE_STMT, myStatement->stmtPtr );

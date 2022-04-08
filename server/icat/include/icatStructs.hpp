@@ -19,6 +19,8 @@ typedef struct {
     int     selectColIds[MAX_NUM_OF_SELECT_ITEMS];  /* rods-id to column in the
                                                      result (unused, so far) */
     char    *resultValue[MAX_NUM_OF_SELECT_ITEMS];  /* pointer to data area */
+    struct timeval startTime;                   /* time statement registered into table */
+    long    traceId;                            /* match statements, sql and bind values */
 } icatStmtStrct;
 
 
