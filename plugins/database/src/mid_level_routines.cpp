@@ -306,6 +306,8 @@ int cmlGetOneRowFromSqlV2( const char *sql,
         return CAT_GET_ROW_ERR;
     }
     if ( icss->stmtPtr[stmtNum]->numOfCols == 0 ) {
+        rodsLog( LOG_WARNING, "Fixed potential statement leak in statement table, slot %d", stmtNum );
+        cllFreeStatement( icss, stmtNum );
         return CAT_NO_ROWS_FOUND;
     }
     for ( j = 0; j < maxCols && j < icss->stmtPtr[stmtNum]->numOfCols ; j++ ) {
