@@ -577,6 +577,43 @@ cllGetNextTraceId( void ) {
     return ++traceId;
 }
 
+/*
+   Allocate statement and enter it into the statement table.
+
+   Returns the index as statementNumber or CAT_STATEMENT_TABLE_FULL when the
+   table is full.
+*/
+int
+allocateStatement(icatStmtStrct* stmtPtr[] ) {
+
+    icatStmtStrct * myStatement = ( icatStmtStrct * )malloc( sizeof( icatStmtStrct ) );
+    memset( myStatement, 0, sizeof( icatStmtStrct ) );
+    myStatement->traceId = cllGetNextTraceId();
+    (void) gettimeofday(&myStatement->startTime, NULL);
+
+    int statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
+    for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS; i++ ) {
+        if ( stmtPtr[i] == 0 ) {
+            statementNumber = i;
+            break;
+        }
+    }
+    if ( statementNumber == UNINITIALIZED_STATEMENT_NUMBER ) {
+        free( myStatement );
+        return CAT_STATEMENT_TABLE_FULL;
+    }
+    stmtPtr[statementNumber] = myStatement;
+
+    /* Debug: preload the statement table with some dummy statements. */
+    if ( myStatement->traceId == 1 ) {
+        for ( int i = 0; i < 3; i++ ) {
+            (void) allocateStatement(stmtPtr);
+        }
+    }
+
+    return statementNumber;
+}
+
 void
 logConcurrentStatements( icatStmtStrct* stmtPtr[] ) {
     for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS; i++ ) {
@@ -594,8 +631,7 @@ logConcurrentStatements( icatStmtStrct* stmtPtr[] ) {
 int
 cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
 
-    long traceId = cllGetNextTraceId();
-    rodsLog( LOG_NOTICE, "traceId: %ld, starting \"%s\"", traceId, sql);
+    logConcurrentStatements( icss->stmtPtr );
 
     /* In 2.2 and some versions before, this would call
        _cllExecSqlNoResult with "begin", similar to how cllExecSqlNoResult
@@ -617,29 +653,17 @@ cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
     // Issue 3862:  Set stmtNum to -1 and in cllFreeStatement if the stmtNum is negative do nothing
     *stmtNum = UNINITIALIZED_STATEMENT_NUMBER;
 
-    int statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
-    logConcurrentStatements( icss->stmtPtr );
-    for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS && statementNumber < 0; i++ ) {
-        if ( icss->stmtPtr[i] == 0 ) {
-            statementNumber = i;
-        }
-    }
-    rodsLog( LOG_NOTICE, "statementNumber[%d] = %s", statementNumber, sql );
+    int statementNumber = allocateStatement(icss->stmtPtr);
     if ( statementNumber < 0 ) {
         rodsLog( LOG_ERROR,
                  "cllExecSqlWithResult: too many concurrent statements" );
         return CAT_STATEMENT_TABLE_FULL;
     }
-
-    icatStmtStrct * myStatement = ( icatStmtStrct * )malloc( sizeof( icatStmtStrct ) );
-    memset( myStatement, 0, sizeof( icatStmtStrct ) );
-
-    icss->stmtPtr[statementNumber] = myStatement;
+    icatStmtStrct * myStatement = icss->stmtPtr[statementNumber];
     *stmtNum = statementNumber;
-
     myStatement->stmtPtr = hstmt;
-    myStatement->traceId = traceId;
-    (void) gettimeofday(&myStatement->startTime, NULL);
+
+    rodsLog( LOG_NOTICE, "statementNumber=%d, traceId=%d, sql=%s", statementNumber, myStatement->traceId, sql );
 
     if ( bindTheVariables( hstmt, sql ) != 0 ) {
         return -1;
@@ -781,8 +805,7 @@ cllExecSqlWithResultBV(
     const char *sql,
     std::vector< std::string > &bindVars ) {
 
-    long traceId = cllGetNextTraceId();
-    rodsLog( LOG_NOTICE, "traceId: %ld, starting \"%s\"", traceId, sql);
+    logConcurrentStatements( icss->stmtPtr );
     rodsLog( LOG_DEBUG10, "%s", sql );
 
     HDBC myHdbc = icss->connectPtr;
@@ -797,29 +820,17 @@ cllExecSqlWithResultBV(
     // Issue 3862:  Set stmtNum to -1 and in cllFreeStatement if the stmtNum is negative do nothing
     *stmtNum = UNINITIALIZED_STATEMENT_NUMBER;
 
-    int statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
-    logConcurrentStatements( icss->stmtPtr );
-    for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS && statementNumber < 0; i++ ) {
-        if ( icss->stmtPtr[i] == 0 ) {
-            statementNumber = i;
-        }
-    }
-    rodsLog( LOG_NOTICE, "statementNumber[%d] = %s", statementNumber, sql );
+    int statementNumber = allocateStatement(icss->stmtPtr);
     if ( statementNumber < 0 ) {
         rodsLog( LOG_ERROR,
-                 "cllExecSqlWithResultBV: too many concurrent statements" );
+                 "cllExecSqlWithResult: too many concurrent statements" );
         return CAT_STATEMENT_TABLE_FULL;
     }
-
-    icatStmtStrct * myStatement = ( icatStmtStrct * )malloc( sizeof( icatStmtStrct ) );
-    memset( myStatement, 0, sizeof( icatStmtStrct ) );
-    icss->stmtPtr[statementNumber] = myStatement;
-
+    icatStmtStrct * myStatement = icss->stmtPtr[statementNumber];
     *stmtNum = statementNumber;
-
     myStatement->stmtPtr = hstmt;
-    myStatement->traceId = traceId;
-    (void) gettimeofday(&myStatement->startTime, NULL);
+
+    rodsLog( LOG_NOTICE, "statementNumber=%d, traceId=%d, sql=%s", statementNumber, myStatement->traceId, sql );
 
     for ( std::size_t i = 0; i < bindVars.size(); i++ ) {
         if ( !bindVars[i].empty() ) {
