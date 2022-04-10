@@ -604,11 +604,20 @@ allocateStatement(icatStmtStrct* stmtPtr[] ) {
     }
     stmtPtr[statementNumber] = myStatement;
 
-    /* Debug: preload the statement table with some dummy statements. */
-    if ( myStatement->traceId == 1 ) {
+    /*
+     * Debug only: preload the statement table with some dummy statements.
+     */
+    if ( myStatement->traceId == 1) {
         for ( int i = 0; i < 3; i++ ) {
-            int statementNumber = allocateStatement(stmtPtr);
-            stmtPtr[statementNumber]->sql.push_back("select 1");
+            char tmpStr[64];
+            int dummyNumber = allocateStatement(stmtPtr);
+            snprintf(tmpStr, sizeof(tmpStr), "bindVar[1]=%ld", stmtPtr[dummyNumber]->traceId);
+            stmtPtr[dummyNumber]->sql.push_back(tmpStr);
+            snprintf(tmpStr, sizeof(tmpStr), "bindVar[2]=%d", dummyNumber);
+            stmtPtr[dummyNumber]->sql.push_back(tmpStr);
+            snprintf(tmpStr, sizeof(tmpStr), "bindVar[3]=%ld", (long) getpid());
+            stmtPtr[dummyNumber]->sql.push_back(tmpStr);
+            stmtPtr[dummyNumber]->sql.push_back("select 1 where traceId=? and statementNumber=? and pid=?");
         }
     }
 
