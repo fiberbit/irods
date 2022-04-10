@@ -10,6 +10,7 @@
 #define ICAT_STRUCTS_HPP
 
 #include "icatDefines.h"
+#include <vector>
 
 typedef struct {
     int status;
@@ -21,6 +22,7 @@ typedef struct {
     char    *resultValue[MAX_NUM_OF_SELECT_ITEMS];  /* pointer to data area */
     struct timeval startTime;                   /* time statement registered into table */
     long    traceId;                            /* match statements, sql and bind values */
+    std::vector<std::string> sql;               /* for tracing, will contain bind vars and sql */
 } icatStmtStrct;
 
 
