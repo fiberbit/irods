@@ -681,6 +681,7 @@ cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
     if ( statementNumber < 0 ) {
         rodsLog( LOG_ERROR,
                  "cllExecSqlWithResult: too many concurrent statements" );
+        rodsLog( LOG_WARNING, "no room in statement table to perform this sql: %s", sql);
         return CAT_STATEMENT_TABLE_FULL;
     }
     icatStmtStrct * myStatement = icss->stmtPtr[statementNumber];
@@ -849,6 +850,7 @@ cllExecSqlWithResultBV(
     if ( statementNumber < 0 ) {
         rodsLog( LOG_ERROR,
                  "cllExecSqlWithResult: too many concurrent statements" );
+        rodsLog( LOG_WARNING, "no room in statement table to perform this sql: %s", sql);
         return CAT_STATEMENT_TABLE_FULL;
     }
     icatStmtStrct * myStatement = icss->stmtPtr[statementNumber];
