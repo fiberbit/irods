@@ -1071,7 +1071,7 @@ cllFreeStatement( icatSessionStruct *icss, int& statementNumber ) {
 
     icatStmtStrct * myStatement = icss->stmtPtr[statementNumber];
     if ( myStatement == NULL ) { /* already freed */
-        rodsLog( LOG_WARNING, "cllFreeStatement(%p, %d) double free prevented", icss, statementNumber);
+        rodsLog( LOG_DEBUG, "cllFreeStatement(%p, %d) double free prevented", icss, statementNumber);
         statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
         return 0;
     }
