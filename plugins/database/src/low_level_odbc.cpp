@@ -606,8 +606,11 @@ allocateStatement(icatStmtStrct* stmtPtr[] ) {
 
     /*
      * Debug only: preload the statement table with some dummy statements.
+     *
+     * By changing the "myStatement->trace == 0" (to 1 for example) you can
+     * debug if the content of the statement table is shown and how.
      */
-    if ( myStatement->traceId == 1) {
+    if ( myStatement->traceId == 0) {
         for ( int i = 0; i < 3; i++ ) {
             char tmpStr[64];
             int dummyNumber = allocateStatement(stmtPtr);
