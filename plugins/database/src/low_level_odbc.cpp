@@ -403,6 +403,20 @@ logTheBindVariables( int level ) {
 }
 
 /*
+  Add sql and bind variables to sqlVec in statement for debugging.
+*/
+void
+traceTheBindVariables( icatStmtStrct* myStatement, const char *sql) {
+    int myBindVarCount = cllBindVarCount;
+    for ( int i = 0; i < myBindVarCount; ++i ) {
+        char tmpStr[TMP_STR_LEN];
+        snprintf( tmpStr, sizeof( tmpStr ), "bindVar[%d]=%s", i + 1, cllBindVars[i] );
+        myStatement->sqlVec.push_back( tmpStr );
+    }
+    myStatement->sqlVec.push_back( sql );
+}
+
+/*
   Bind variables from the global array.
 */
 int
@@ -615,12 +629,12 @@ allocateStatement(icatStmtStrct* stmtPtr[] ) {
             char tmpStr[64];
             int dummyNumber = allocateStatement(stmtPtr);
             snprintf(tmpStr, sizeof(tmpStr), "bindVar[1]=%ld", stmtPtr[dummyNumber]->traceId);
-            stmtPtr[dummyNumber]->sql.push_back(tmpStr);
+            stmtPtr[dummyNumber]->sqlVec.push_back(tmpStr);
             snprintf(tmpStr, sizeof(tmpStr), "bindVar[2]=%d", dummyNumber);
-            stmtPtr[dummyNumber]->sql.push_back(tmpStr);
+            stmtPtr[dummyNumber]->sqlVec.push_back(tmpStr);
             snprintf(tmpStr, sizeof(tmpStr), "bindVar[3]=%ld", (long) getpid());
-            stmtPtr[dummyNumber]->sql.push_back(tmpStr);
-            stmtPtr[dummyNumber]->sql.push_back("select 1 where traceId=? and statementNumber=? and pid=?");
+            stmtPtr[dummyNumber]->sqlVec.push_back(tmpStr);
+            stmtPtr[dummyNumber]->sqlVec.push_back("select 1 where traceId=? and statementNumber=? and pid=?");
         }
     }
 
@@ -637,16 +651,17 @@ logConcurrentStatements( icatStmtStrct* stmtPtr[] ) {
         if ( myStatement ) {
             rodsLog( level, "----------------------------------------------------------------------------");
             generateTimestampMillis( timestamp, myStatement->startTime );
-            rodsLog( level, "active statement with traceId: %ld in slot %d, started: %s", myStatement->traceId, i, timestamp);
-            for ( const auto& value: stmtPtr[i]->sql ) {
-                rodsLog( level, value.c_str());
+            rodsLog( level, "  active statement, traceId:%ld, slot:%d, params:%ld, started: %s", myStatement->traceId, i, (long) myStatement->sqlVec.size(), timestamp);
+            for ( const auto& value: myStatement->sqlVec ) {
+                rodsLog( level, "    %s", value.c_str());
             }
             count++;
         }
     }
-    if ( count > 1 ) {
-        rodsLog(level, "number of active statements in table: %d out of %d, pid: %ld, ppid: %ld", count,
+    if ( count > 0 ) {
+        rodsLog(level, "  number of active statements in table: %d out of %d, pid:%ld, ppid:%ld", count,
                 MAX_NUM_OF_CONCURRENT_STMTS, (long) getpid(), (long) getppid());
+        rodsLog( level, "----------------------------------------------------------------------------");
     }
 }
 
@@ -657,8 +672,6 @@ logConcurrentStatements( icatStmtStrct* stmtPtr[] ) {
 */
 int
 cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
-
-    logConcurrentStatements( icss->stmtPtr );
 
     /* In 2.2 and some versions before, this would call
        _cllExecSqlNoResult with "begin", similar to how cllExecSqlNoResult
@@ -682,6 +695,7 @@ cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
 
     int statementNumber = allocateStatement(icss->stmtPtr);
     if ( statementNumber < 0 ) {
+        logConcurrentStatements( icss->stmtPtr );
         rodsLog( LOG_ERROR,
                  "cllExecSqlWithResult: too many concurrent statements" );
         rodsLog( LOG_WARNING, "no room in statement table to perform this sql: %s", sql);
@@ -690,15 +704,18 @@ cllExecSqlWithResult( icatSessionStruct *icss, int *stmtNum, const char *sql ) {
     icatStmtStrct * myStatement = icss->stmtPtr[statementNumber];
     *stmtNum = statementNumber;
     myStatement->stmtPtr = hstmt;
-    myStatement->sql.push_back( sql );
+    traceTheBindVariables( myStatement, sql );
 
-    rodsLog( LOG_NOTICE, "statementNumber=%d, traceId=%d, sql=%s", statementNumber, myStatement->traceId, sql );
+    rodsLog( LOG_NOTICE, "traceId:%ld, slot:%d, sql:%s", myStatement->traceId, statementNumber, sql );
 
     if ( bindTheVariables( hstmt, sql ) != 0 ) {
+        logConcurrentStatements( icss->stmtPtr );
         return -1;
     }
 
     rodsLogSql( sql );
+    logConcurrentStatements( icss->stmtPtr );
+
     stat = SQLExecDirect( hstmt, ( unsigned char * )sql, strlen( sql ) );
 
     switch ( stat ) {
@@ -834,7 +851,6 @@ cllExecSqlWithResultBV(
     const char *sql,
     std::vector< std::string > &bindVars ) {
 
-    logConcurrentStatements( icss->stmtPtr );
     rodsLog( LOG_DEBUG10, "%s", sql );
 
     HDBC myHdbc = icss->connectPtr;
@@ -851,6 +867,7 @@ cllExecSqlWithResultBV(
 
     int statementNumber = allocateStatement(icss->stmtPtr);
     if ( statementNumber < 0 ) {
+        logConcurrentStatements( icss->stmtPtr );
         rodsLog( LOG_ERROR,
                  "cllExecSqlWithResult: too many concurrent statements" );
         rodsLog( LOG_WARNING, "no room in statement table to perform this sql: %s", sql);
@@ -860,7 +877,7 @@ cllExecSqlWithResultBV(
     *stmtNum = statementNumber;
     myStatement->stmtPtr = hstmt;
 
-    rodsLog( LOG_NOTICE, "statementNumber=%d, traceId=%d, sql=%s", statementNumber, myStatement->traceId, sql );
+    rodsLog( LOG_NOTICE, "traceId:%ld, slot:%d, sql:%s", myStatement->traceId, statementNumber, sql );
 
     for ( std::size_t i = 0; i < bindVars.size(); i++ ) {
         if ( !bindVars[i].empty() ) {
@@ -869,7 +886,7 @@ cllExecSqlWithResultBV(
                                      SQL_CHAR, 0, 0, const_cast<char*>( bindVars[i].c_str() ), bindVars[i].size(), const_cast<SQLLEN*>( &GLOBAL_SQL_NTS ) );
             char tmpStr[TMP_STR_LEN];
             snprintf( tmpStr, sizeof( tmpStr ), "bindVar%ju=%s", static_cast<uintmax_t>(i + 1), bindVars[i].c_str() );
-            myStatement->sql.push_back( tmpStr );
+            myStatement->sqlVec.push_back( std::string(tmpStr) );
             rodsLogSql( tmpStr );
             if ( stat != SQL_SUCCESS ) {
                 rodsLog( LOG_ERROR,
@@ -878,8 +895,9 @@ cllExecSqlWithResultBV(
             }
         }
     }
-    myStatement->sql.push_back( sql );
+    myStatement->sqlVec.push_back( sql );
     rodsLogSql( sql );
+    logConcurrentStatements( icss->stmtPtr );
     stat = SQLExecDirect( hstmt, ( unsigned char * )sql, strlen( sql ) );
 
     switch ( stat ) {
@@ -1082,7 +1100,7 @@ cllFreeStatement( icatSessionStruct *icss, int& statementNumber ) {
     }
 
     generateTimestampMillis( timestamp, myStatement->startTime );
-    rodsLog( LOG_NOTICE, "traceId: %d, cllFreeStatement(%p, %d), started %s",
+    rodsLog( LOG_NOTICE, "traceId:%ld, cllFreeStatement(%p, %d), started %s",
             myStatement->traceId, icss, statementNumber,
             timestamp);
     _cllFreeStatementColumns( icss, statementNumber );
@@ -1093,7 +1111,7 @@ cllFreeStatement( icatSessionStruct *icss, int& statementNumber ) {
         rodsLog( LOG_ERROR, "cllFreeStatement SQLFreeHandle for statement error: %d", stat );
     }
 
-    myStatement->sql.clear();
+    myStatement->sqlVec.clear();
     free( myStatement );
     icss->stmtPtr[statementNumber] = NULL; /* indicate that the statement is free */
     statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
