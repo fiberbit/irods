@@ -624,17 +624,21 @@ allocateStatement(icatStmtStrct* stmtPtr[] ) {
      * By changing the "myStatement->trace == 0" (to 1 for example) you can
      * debug if the content of the statement table is shown and how.
      */
-    if ( myStatement->traceId == 0) {
-        for ( int i = 0; i < 3; i++ ) {
+    if ( myStatement->traceId % 16 == 0) {
+        for ( int i = 0; i < 4; i++ ) {
             char tmpStr[64];
             int dummyNumber = allocateStatement(stmtPtr);
-            snprintf(tmpStr, sizeof(tmpStr), "bindVar[1]=%ld", stmtPtr[dummyNumber]->traceId);
-            stmtPtr[dummyNumber]->sqlVec.push_back(tmpStr);
+            icatStmtStrct * dummyStatement = stmtPtr[dummyNumber];
+            snprintf(tmpStr, sizeof(tmpStr), "bindVar[1]=%ld", dummyStatement->traceId);
+            dummyStatement->sqlVec.push_back(tmpStr);
             snprintf(tmpStr, sizeof(tmpStr), "bindVar[2]=%d", dummyNumber);
-            stmtPtr[dummyNumber]->sqlVec.push_back(tmpStr);
+            dummyStatement->sqlVec.push_back(tmpStr);
             snprintf(tmpStr, sizeof(tmpStr), "bindVar[3]=%ld", (long) getpid());
-            stmtPtr[dummyNumber]->sqlVec.push_back(tmpStr);
-            stmtPtr[dummyNumber]->sqlVec.push_back("select 1 where traceId=? and statementNumber=? and pid=?");
+            dummyStatement->sqlVec.push_back(tmpStr);
+            dummyStatement->sqlVec.push_back("select 1 where traceId=? and statementNumber=? and pid=?");
+            dummyStatement->sqlVec.clear();
+            free( stmtPtr[dummyNumber] );
+            stmtPtr[dummyNumber] = NULL; /* indicate that the statement is free again */
         }
     }
 
