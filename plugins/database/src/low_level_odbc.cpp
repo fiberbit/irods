@@ -411,9 +411,9 @@ traceTheBindVariables( icatStmtStrct* myStatement, const char *sql) {
     for ( int i = 0; i < myBindVarCount; ++i ) {
         char tmpStr[TMP_STR_LEN];
         snprintf( tmpStr, sizeof( tmpStr ), "bindVar[%d]=%s", i + 1, cllBindVars[i] );
-        myStatement->sqlVec.push_back( tmpStr );
+        myStatement->upSqlVec->push_back( tmpStr );
     }
-    myStatement->sqlVec.push_back( sql );
+    myStatement->upSqlVec->push_back( sql );
 }
 
 /*
@@ -604,6 +604,7 @@ allocateStatement(icatStmtStrct* stmtPtr[] ) {
     memset( myStatement, 0, sizeof( icatStmtStrct ) );
     myStatement->traceId = cllGetNextTraceId();
     (void) gettimeofday(&myStatement->startTime, NULL);
+    myStatement->upSqlVec.reset( new std::vector<std::string> );
 
     int statementNumber = UNINITIALIZED_STATEMENT_NUMBER;
     for ( int i = 0; i < MAX_NUM_OF_CONCURRENT_STMTS; i++ ) {
@@ -630,13 +631,13 @@ allocateStatement(icatStmtStrct* stmtPtr[] ) {
             int dummyNumber = allocateStatement(stmtPtr);
             icatStmtStrct * dummyStatement = stmtPtr[dummyNumber];
             snprintf(tmpStr, sizeof(tmpStr), "bindVar[1]=%ld", dummyStatement->traceId);
-            dummyStatement->sqlVec.push_back(tmpStr);
+            dummyStatement->upSqlVec->push_back(tmpStr);
             snprintf(tmpStr, sizeof(tmpStr), "bindVar[2]=%d", dummyNumber);
-            dummyStatement->sqlVec.push_back(tmpStr);
+            dummyStatement->upSqlVec->push_back(tmpStr);
             snprintf(tmpStr, sizeof(tmpStr), "bindVar[3]=%ld", (long) getpid());
-            dummyStatement->sqlVec.push_back(tmpStr);
-            dummyStatement->sqlVec.push_back("select 1 where traceId=? and statementNumber=? and pid=?");
-            dummyStatement->sqlVec.clear();
+            dummyStatement->upSqlVec->push_back(tmpStr);
+            dummyStatement->upSqlVec->push_back("select 1 where traceId=? and statementNumber=? and pid=?");
+            dummyStatement->upSqlVec.reset();
             free( stmtPtr[dummyNumber] );
             stmtPtr[dummyNumber] = NULL; /* indicate that the statement is free again */
         }
@@ -655,8 +656,8 @@ logConcurrentStatements( icatStmtStrct* stmtPtr[] ) {
         if ( myStatement ) {
             rodsLog( level, "----------------------------------------------------------------------------");
             generateTimestampMillis( timestamp, myStatement->startTime );
-            rodsLog( level, "  active statement, traceId:%ld, slot:%d, params:%ld, started: %s", myStatement->traceId, i, (long) myStatement->sqlVec.size(), timestamp);
-            for ( const auto& value: myStatement->sqlVec ) {
+            rodsLog( level, "  active statement, traceId:%ld, slot:%d, params:%ld, started: %s", myStatement->traceId, i, (long) myStatement->upSqlVec->size(), timestamp);
+            for ( const auto& value: *myStatement->upSqlVec ) {
                 rodsLog( level, "    %s", value.c_str());
             }
             count++;
@@ -890,7 +891,7 @@ cllExecSqlWithResultBV(
                                      SQL_CHAR, 0, 0, const_cast<char*>( bindVars[i].c_str() ), bindVars[i].size(), const_cast<SQLLEN*>( &GLOBAL_SQL_NTS ) );
             char tmpStr[TMP_STR_LEN];
             snprintf( tmpStr, sizeof( tmpStr ), "bindVar%ju=%s", static_cast<uintmax_t>(i + 1), bindVars[i].c_str() );
-            myStatement->sqlVec.push_back( std::string(tmpStr) );
+            myStatement->upSqlVec->push_back( std::string(tmpStr) );
             rodsLogSql( tmpStr );
             if ( stat != SQL_SUCCESS ) {
                 rodsLog( LOG_ERROR,
@@ -899,7 +900,7 @@ cllExecSqlWithResultBV(
             }
         }
     }
-    myStatement->sqlVec.push_back( sql );
+    myStatement->upSqlVec->push_back( sql );
     rodsLogSql( sql );
     logConcurrentStatements( icss->stmtPtr );
     stat = SQLExecDirect( hstmt, ( unsigned char * )sql, strlen( sql ) );
@@ -1115,7 +1116,7 @@ cllFreeStatement( icatSessionStruct *icss, int& statementNumber ) {
         rodsLog( LOG_ERROR, "cllFreeStatement SQLFreeHandle for statement error: %d", stat );
     }
 
-    myStatement->sqlVec.clear();
+    myStatement->upSqlVec.reset();
     free( myStatement );
     icss->stmtPtr[statementNumber] = NULL; /* indicate that the statement is free */
     statementNumber = UNINITIALIZED_STATEMENT_NUMBER;

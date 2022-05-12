@@ -22,7 +22,7 @@ typedef struct {
     char    *resultValue[MAX_NUM_OF_SELECT_ITEMS];  /* pointer to data area */
     struct timeval startTime;                   /* time statement registered into table */
     long    traceId;                            /* match statements, sql and bind values */
-    std::vector<std::string> sqlVec;            /* for tracing, will contain bind vars and sql */
+    std::unique_ptr< std::vector<std::string> > upSqlVec; /* for tracing, will contain bind vars and sql */
 } icatStmtStrct;
 
 
