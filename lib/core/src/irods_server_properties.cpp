@@ -4,7 +4,7 @@
 #include "rodsLog.h"
 
 #include <boost/any.hpp>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 
 #include <fstream>
 #include <unordered_map>

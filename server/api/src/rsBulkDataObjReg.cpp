@@ -84,7 +84,7 @@ int _rsBulkDataObjReg(
                     *dataMode, *oprType, *replNum, *chksum;
         char *tmpObjPath, *tmpDataType, *tmpDataSize, *tmpRescName, *tmpRescID, *tmpFilePath,
              *tmpDataMode, *tmpOprType, *tmpReplNum, *tmpChksum;
-        char *tmpObjId;
+        // FIXME unused ?! char *tmpObjId;
         int status;
 
         if ( ( rescID =
@@ -175,7 +175,7 @@ int _rsBulkDataObjReg(
             tmpDataMode = &dataMode->value[dataMode->len * i];
             tmpOprType = &oprType->value[oprType->len * i];
             tmpReplNum =  &replNum->value[replNum->len * i];
-            tmpObjId = &objId->value[objId->len * i];
+            // FIXME not used ?! tmpObjId = &objId->value[objId->len * i];
 
             dataObjInfo_t dataObjInfo{};
             dataObjInfo.flags = NO_COMMIT_FLAG;

@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 
 #include "rodsClient.h"
 #include "connection_pool.hpp"
@@ -8,7 +8,7 @@
 #include "get_file_descriptor_info.h"
 #include "irods_at_scope_exit.hpp"
 
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 
 TEST_CASE("get_file_descriptor_info")
 {

@@ -44,7 +44,7 @@
 #include <boost/optional.hpp>
 #include <boost/system/error_code.hpp>
 
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 
 #include <cstring>
 #include <vector>

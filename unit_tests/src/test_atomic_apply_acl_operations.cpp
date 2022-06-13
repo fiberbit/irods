@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 
 #include "rodsClient.h"
 #include "atomic_apply_acl_operations.h"
@@ -8,7 +8,7 @@
 #include "user_administration.hpp"
 #include "irods_at_scope_exit.hpp"
 
-#include "json.hpp"
+#include "nlohmann/json.hpp"
 
 #include <cstdlib>
 #include <string>

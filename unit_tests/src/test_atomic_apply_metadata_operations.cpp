@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 
 #include "client_connection.hpp"
 #include "atomic_apply_metadata_operations.h"
@@ -7,7 +7,7 @@
 #include "rodsErrorTable.h"
 #include "getRodsEnv.h"
 
-#include "json.hpp"
+#include "nlohmann/json.hpp"
 
 #include <cstdlib>
 #include <string>

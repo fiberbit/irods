@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 
 #include "irods_error_enum_matcher.hpp"
 #include "rodsClient.h"
@@ -16,7 +16,7 @@
 #include "transport/default_transport.hpp"
 #include "unit_test_utils.hpp"
 
-#include "json.hpp"
+#include "nlohmann/json.hpp"
 #include "fmt/format.h"
 
 #include <cstdlib>

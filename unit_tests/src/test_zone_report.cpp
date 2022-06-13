@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 
 #include "connection_pool.hpp"
 #include "resource_administration.hpp"
@@ -9,7 +9,7 @@
 
 #include <tuple>
 
-#include "json.hpp"
+#include "nlohmann/json.hpp"
 
 TEST_CASE("json zone report")
 {

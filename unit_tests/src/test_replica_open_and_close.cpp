@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 
 #include "rodsClient.h"
 #include "connection_pool.hpp"
@@ -12,7 +12,7 @@
 #include "modDataObjMeta.h"
 
 #include <fmt/format.h>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 
 #include <string_view>
 
